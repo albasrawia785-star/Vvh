@@ -15,7 +15,7 @@ jobs:
       - name: 1. جلب كود المشروع من مستودع GitHub
         uses: actions/checkout@v4
 
-      - name: 2. إعداد بيئة Java (بدون كاش لتجنب أخطاء المسارات الفرعية)
+      - name: 2. إعداد بيئة Java (JDK 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -43,10 +43,21 @@ jobs:
           EOF
           done
 
-      - name: 5. بدء بناء نسخة الـ APK
+      - name: 5. تحديد موقع gradlew وبدء البناء
         run: |
-          TARGET_DIR=$(find . -maxdepth 3 \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -exec dirname {} \; | head -n 1)
-          cd "$TARGET_DIR"
+          # البحث عن المسار الذي يحتوي على gradlew مباشرة
+          GRADLEW_PATH=$(find . -name "gradlew" -print -quit)
+          
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "❌ لم يتم العثور على ملف gradlew في المشروع!"
+            exit 1
+          fi
+          
+          # الانتقال إلى المجلد الذي يحتوي على gradlew
+          PROJECT_ROOT=$(dirname "$GRADLEW_PATH")
+          cd "$PROJECT_ROOT"
+          
+          echo "🚀 جاري البناء من المجلد: $(pwd)"
           ./gradlew assembleDebug --no-daemon
 
       - name: 6. رفع ملف الـ APK النهائي للتحميل
