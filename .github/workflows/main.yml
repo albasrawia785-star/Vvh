@@ -21,12 +21,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. إعطاء تصاريح التشغيل لأمر Gradle Wrapper
+      - name: 3. إنشاء ملف google-services.json وهمي لمنع أخطاء البناء
         run: |
-          find . -name "gradlew" -exec chmod +x {} \;
-
-      - name: 4. إنشاء ملف google-services.json وهمي لمنع أخطاء البناء
-        run: |
+          echo "جاري تجهيز المجلدات وإنشاء ملفات التكلفة الوهمية لخدمات غوغل..."
           find . -type d -name "app" | while read app_dir; do
             cat <<EOF > "$app_dir/google-services.json"
           {
@@ -43,24 +40,34 @@ jobs:
           EOF
           done
 
-      - name: 5. تحديد موقع gradlew وبدء البناء
+      - name: 4. تحديد موقع المشروع وإعداد الـ Wrapper والبناء
         run: |
-          # البحث عن المسار الذي يحتوي على gradlew مباشرة
-          GRADLEW_PATH=$(find . -name "gradlew" -print -quit)
+          # 1. البحث عن المجلد الأساسي الذي يحتوي على settings.gradle أو build.gradle
+          TARGET_FILE=$(find . -name "settings.gradle.kts" -o -name "settings.gradle" -o -name "build.gradle.kts" -o -name "build.gradle" | head -n 1)
           
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "❌ لم يتم العثور على ملف gradlew في المشروع!"
+          if [ -z "$TARGET_FILE" ]; then
+            echo "❌ لم يتم العثور على أي ملفات إعداد Gradle في الكود!"
             exit 1
           fi
           
-          # الانتقال إلى المجلد الذي يحتوي على gradlew
-          PROJECT_ROOT=$(dirname "$GRADLEW_PATH")
+          PROJECT_ROOT=$(dirname "$TARGET_FILE")
           cd "$PROJECT_ROOT"
-          
-          echo "🚀 جاري البناء من المجلد: $(pwd)"
+          echo "📍 مجلد العمل الحالي: $(pwd)"
+
+          # 2. التأكد من وجود gradlew أو توليده تلقائياً من البيئة
+          if [ ! -f "./gradlew" ]; then
+            echo "⚙️ ملف gradlew غير موجود.. جاري توليده تلقائياً باستخدام النظام..."
+            gradle wrapper
+          fi
+
+          # 3. منح تصاريح التنفيذ الكاملة
+          chmod +x gradlew
+
+          # 4. بدء الكومبايل
+          echo "🚀 بدء عملية بناء الـ APK..."
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. رفع ملف الـ APK النهائي للتحميل
+      - name: 5. رفع ملف الـ APK النهائي للتحميل من GitHub
         uses: actions/upload-artifact@v4
         with:
           name: SmartCashier-Offline-Debug
