@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. جلب كود المشروع من مستودع GitHub
+      - name: 1. جلب المستودع من GitHub
         uses: actions/checkout@v4
 
       - name: 2. إعداد بيئة Java (JDK 17)
@@ -21,9 +21,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 3. إنشاء ملف google-services.json وهمي لمنع أخطاء البناء
+      - name: 3. فك ضغط ملف g.zip تلقائياً
         run: |
-          echo "جاري تجهيز المجلدات وإنشاء ملفات التكلفة الوهمية لخدمات غوغل..."
+          if [ -f "g.zip" ]; then
+            echo "📦 تم العثور على g.zip، جاري فك الضغط..."
+            unzip -o g.zip -d extracted_project
+          else
+            echo "⚠️ لم يتم العثور على g.zip في جذر المستودع!"
+          fi
+
+      - name: 4. إنشاء ملف google-services.json وهمي
+        run: |
           find . -type d -name "app" | while read app_dir; do
             cat <<EOF > "$app_dir/google-services.json"
           {
@@ -40,34 +48,31 @@ jobs:
           EOF
           done
 
-      - name: 4. تحديد موقع المشروع وإعداد الـ Wrapper والبناء
+      - name: 5. تحديد المجلد المستخرج وبناء الـ APK
         run: |
-          # 1. البحث عن المجلد الأساسي الذي يحتوي على settings.gradle أو build.gradle
-          TARGET_FILE=$(find . -name "settings.gradle.kts" -o -name "settings.gradle" -o -name "build.gradle.kts" -o -name "build.gradle" | head -n 1)
+          # البحث عن ملفات Gradle داخل المستودع أو المجلد المفكوك
+          TARGET_FILE=$(find . \( -name "settings.gradle.kts" -o -name "settings.gradle" -o -name "build.gradle.kts" -o -name "build.gradle" \) -not -path "*/build/*" | head -n 1)
           
           if [ -z "$TARGET_FILE" ]; then
-            echo "❌ لم يتم العثور على أي ملفات إعداد Gradle في الكود!"
+            echo "❌ لم يتم العثور على ملفات المشروع بعد فك الضغط!"
             exit 1
           fi
           
           PROJECT_ROOT=$(dirname "$TARGET_FILE")
           cd "$PROJECT_ROOT"
-          echo "📍 مجلد العمل الحالي: $(pwd)"
+          echo "📍 مجلد المشروع الحالي: $(pwd)"
 
-          # 2. التأكد من وجود gradlew أو توليده تلقائياً من البيئة
+          # إنشاء gradlew إذا لم يكن موجوداً داخل الضغط
           if [ ! -f "./gradlew" ]; then
-            echo "⚙️ ملف gradlew غير موجود.. جاري توليده تلقائياً باستخدام النظام..."
+            echo "⚙️ جاري إنشاء gradlew..."
             gradle wrapper
           fi
 
-          # 3. منح تصاريح التنفيذ الكاملة
           chmod +x gradlew
-
-          # 4. بدء الكومبايل
-          echo "🚀 بدء عملية بناء الـ APK..."
+          echo "🚀 بدء البناء والكومبايل..."
           ./gradlew assembleDebug --no-daemon
 
-      - name: 5. رفع ملف الـ APK النهائي للتحميل من GitHub
+      - name: 6. رفع ملف الـ APK النهائي للتحميل
         uses: actions/upload-artifact@v4
         with:
           name: SmartCashier-Offline-Debug
