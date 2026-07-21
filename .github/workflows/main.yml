@@ -30,9 +30,8 @@ jobs:
             echo "⚠️ لم يتم العثور على g.zip في جذر المستودع!"
           fi
 
-      - name: 4. تحديد المجلد المستخرج وبناء الـ APK
+      - name: 4. تحديد المجلد وإنشاء الملفات المطلوبة للتوقيع وغوغل
         run: |
-          # البحث عن ملفات Gradle داخل المستودع أو المجلد المفكوك
           TARGET_FILE=$(find . \( -name "settings.gradle.kts" -o -name "settings.gradle" -o -name "build.gradle.kts" -o -name "build.gradle" \) -not -path "*/build/*" | head -n 1)
           
           if [ -z "$TARGET_FILE" ]; then
@@ -44,8 +43,15 @@ jobs:
           cd "$PROJECT_ROOT"
           echo "📍 مجلد المشروع الحالي: $(pwd)"
 
-          # إنشاء ملف google-services.json مكتمل المكونات لتخطي فحص غوغل
-          echo "⚙️ إنشاء ملف google-services.json مكتمل بالقيم الوهمية..."
+          # 🔑 توليد ملف debug.keystore افتراضي لتوقيع التطبيق
+          echo "🔑 جاري توليد ملف debug.keystore المطلوبة للبناء..."
+          keytool -genkey -v -keystore debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+          # ⚙️ إنشاء ملف google-services.json وهمي مكتمل
+          echo "⚙️ إنشاء ملف google-services.json وهمي..."
           find . -type d -name "app" | while read app_dir; do
             cat <<EOF > "$app_dir/google-services.json"
           {
@@ -80,14 +86,14 @@ jobs:
           EOF
           done
 
-          # إنشاء gradlew إذا لم يكن موجوداً داخل الضغط
+          # إنشاء gradlew إذا لم يكن موجوداً
           if [ ! -f "./gradlew" ]; then
             echo "⚙️ جاري إنشاء gradlew..."
             gradle wrapper
           fi
 
           chmod +x gradlew
-          echo "🚀 بدء البناء والكومبايل..."
+          echo "🚀 بدء البناء والكومبايل النهائي..."
           ./gradlew assembleDebug --no-daemon
 
       - name: 5. رفع ملف الـ APK النهائي للتحميل
