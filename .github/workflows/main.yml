@@ -15,20 +15,18 @@ jobs:
       - name: 1. جلب كود المشروع من مستودع GitHub
         uses: actions/checkout@v4
 
-      - name: 2. إعداد بيئة Java Development Kit (JDK 17)
+      - name: 2. إعداد بيئة Java (بدون كاش لتجنب أخطاء المسارات الفرعية)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: 3. إعطاء تصاريح التشغيل لأمر Gradle Wrapper
         run: |
           find . -name "gradlew" -exec chmod +x {} \;
 
-      - name: 4. إلغاء/تخطي فحص google-services.json تلقائياً
+      - name: 4. إنشاء ملف google-services.json وهمي لمنع أخطاء البناء
         run: |
-          echo "إنشاء ملف وهمي لتجنب أخطاء حزم Google المتخلفة في المشروع..."
           find . -type d -name "app" | while read app_dir; do
             cat <<EOF > "$app_dir/google-services.json"
           {
@@ -45,14 +43,13 @@ jobs:
           EOF
           done
 
-      - name: 5. بدء بناء نسخة الـ APK (assembleDebug)
+      - name: 5. بدء بناء نسخة الـ APK
         run: |
-          # العثور على المجلد الذي يحتوي على settings.gradle.kts أو settings.gradle وتشغيل البناء داخله
           TARGET_DIR=$(find . -maxdepth 3 \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -exec dirname {} \; | head -n 1)
           cd "$TARGET_DIR"
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. رفع ملف الـ APK النهائي للتحميل من GitHub
+      - name: 6. رفع ملف الـ APK النهائي للتحميل
         uses: actions/upload-artifact@v4
         with:
           name: SmartCashier-Offline-Debug
