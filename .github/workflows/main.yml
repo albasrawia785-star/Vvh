@@ -30,25 +30,7 @@ jobs:
             echo "⚠️ لم يتم العثور على g.zip في جذر المستودع!"
           fi
 
-      - name: 4. إنشاء ملف google-services.json وهمي
-        run: |
-          find . -type d -name "app" | while read app_dir; do
-            cat <<EOF > "$app_dir/google-services.json"
-          {
-            "project_info": { "project_number": "000000000000", "project_id": "offline-app" },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
-                  "android_client_info": { "package_name": "com.aistudio.smartcashierpos.offlinepos" }
-                }
-              }
-            ]
-          }
-          EOF
-          done
-
-      - name: 5. تحديد المجلد المستخرج وبناء الـ APK
+      - name: 4. تحديد المجلد المستخرج وبناء الـ APK
         run: |
           # البحث عن ملفات Gradle داخل المستودع أو المجلد المفكوك
           TARGET_FILE=$(find . \( -name "settings.gradle.kts" -o -name "settings.gradle" -o -name "build.gradle.kts" -o -name "build.gradle" \) -not -path "*/build/*" | head -n 1)
@@ -62,6 +44,42 @@ jobs:
           cd "$PROJECT_ROOT"
           echo "📍 مجلد المشروع الحالي: $(pwd)"
 
+          # إنشاء ملف google-services.json مكتمل المكونات لتخطي فحص غوغل
+          echo "⚙️ إنشاء ملف google-services.json مكتمل بالقيم الوهمية..."
+          find . -type d -name "app" | while read app_dir; do
+            cat <<EOF > "$app_dir/google-services.json"
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "offline-pos-app",
+              "storage_bucket": "offline-pos-app.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:1234567890123456",
+                  "android_client_info": {
+                    "package_name": "com.aistudio.smartcashierpos.offlinepos"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  {
+                    "current_key": "mock_api_key_for_offline_build_purposes"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          done
+
           # إنشاء gradlew إذا لم يكن موجوداً داخل الضغط
           if [ ! -f "./gradlew" ]; then
             echo "⚙️ جاري إنشاء gradlew..."
@@ -72,7 +90,7 @@ jobs:
           echo "🚀 بدء البناء والكومبايل..."
           ./gradlew assembleDebug --no-daemon
 
-      - name: 6. رفع ملف الـ APK النهائي للتحميل
+      - name: 5. رفع ملف الـ APK النهائي للتحميل
         uses: actions/upload-artifact@v4
         with:
           name: SmartCashier-Offline-Debug
