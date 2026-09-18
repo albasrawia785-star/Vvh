@@ -68,10 +68,33 @@ jobs:
           });
           EOF
 
+      - name: Update package.json Metadata
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.name = "daftar-aldeyon";
+            pkg.version = "1.0.0";
+            pkg.description = "Daftar Aldeyon Desktop App";
+            pkg.author = "Developer";
+            pkg.build = {
+              appId: "com.daftar.aldeyon",
+              productName: "دفتر الديون",
+              directories: {
+                output: "dist_electron"
+              },
+              win: {
+                target: "nsis"
+              }
+            };
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2));
+          '
+
       - name: Build Windows EXE
         shell: bash
         run: |
-          npx electron-builder --win nsis --config.extraMetadata.main=main.js
+          npx electron-builder --win nsis --config.extraMetadata.main=main.js --publish never
 
       - name: Upload Windows EXE Artifact
         uses: actions/upload-artifact@v4
