@@ -1,103 +1,80 @@
-name: Build Offline Android Debug APK
+Name: Build Windows EXE
 
 on:
   push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
-      - name: 1. جلب المستودع من GitHub
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: 2. إعداد بيئة Java (JDK 17)
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 3. فك ضغط ملف g.zip تلقائياً
+      - name: Unzip Project Files
+        shell: bash
         run: |
-          if [ -f "g.zip" ]; then
-            echo "📦 تم العثور على g.zip، جاري فك الضغط..."
-            unzip -o g.zip -d extracted_project
+          unzip "pos.zip--صيدلي-برو" -d temp_unzip || unzip *.zip -d temp_unzip || true
+          TARGET_DIR=$(find temp_unzip -name "package.json" -exec dirname {} \;)
+          if [ -n "$TARGET_DIR" ]; then
+            echo "Found project files in: $TARGET_DIR"
+            cp -r $TARGET_DIR/* .
           else
-            echo "⚠️ لم يتم العثور على g.zip في جذر المستودع!"
-          fi
-
-      - name: 4. تحديد المجلد وإنشاء الملفات المطلوبة للتوقيع وغوغل
-        run: |
-          TARGET_FILE=$(find . \( -name "settings.gradle.kts" -o -name "settings.gradle" -o -name "build.gradle.kts" -o -name "build.gradle" \) -not -path "*/build/*" | head -n 1)
-          
-          if [ -z "$TARGET_FILE" ]; then
-            echo "❌ لم يتم العثور على ملفات المشروع بعد فك الضغط!"
+            echo "Error: package.json not found!"
             exit 1
           fi
-          
-          PROJECT_ROOT=$(dirname "$TARGET_FILE")
-          cd "$PROJECT_ROOT"
-          echo "📍 مجلد المشروع الحالي: $(pwd)"
+          rm -rf temp_unzip
 
-          # 🔑 توليد ملف debug.keystore افتراضي لتوقيع التطبيق
-          echo "🔑 جاري توليد ملف debug.keystore المطلوبة للبناء..."
-          keytool -genkey -v -keystore debug.keystore \
-            -storepass android -alias androiddebugkey -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-          # ⚙️ إنشاء ملف google-services.json وهمي مكتمل
-          echo "⚙️ إنشاء ملف google-services.json وهمي..."
-          find . -type d -name "app" | while read app_dir; do
-            cat <<EOF > "$app_dir/google-services.json"
-          {
-            "project_info": {
-              "project_number": "123456789012",
-              "project_id": "offline-pos-app",
-              "storage_bucket": "offline-pos-app.appspot.com"
-            },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:123456789012:android:1234567890123456",
-                  "android_client_info": {
-                    "package_name": "com.aistudio.smartcashierpos.offlinepos"
-                  }
-                },
-                "oauth_client": [],
-                "api_key": [
-                  {
-                    "current_key": "mock_api_key_for_offline_build_purposes"
-                  }
-                ],
-                "services": {
-                  "appinvite_service": {
-                    "other_platform_oauth_client": []
-                  }
-                }
+      - name: Install Dependencies
+        run: |
+          npm install --force
+          npm install --save-dev electron electron-builder
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Create Electron Entry Point
+        shell: bash
+        run: |
+          cat << 'EOF' > main.js
+          const { app, BrowserWindow } = require('electron');
+          const path = require('path');
+
+          function createWindow() {
+            const win = new BrowserWindow({
+              width: 1200,
+              height: 800,
+              autoHideMenuBar: true,
+              webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true
               }
-            ],
-            "configuration_version": "1"
+            });
+
+            win.loadFile('dist/index.html');
           }
+
+          app.whenReady().then(createWindow);
+
+          app.on('window-all-closed', () => {
+            if (process.platform !== 'darwin') app.quit();
+          });
           EOF
-          done
 
-          # إنشاء gradlew إذا لم يكن موجوداً
-          if [ ! -f "./gradlew" ]; then
-            echo "⚙️ جاري إنشاء gradlew..."
-            gradle wrapper
-          fi
+      - name: Build Windows EXE
+        shell: bash
+        run: |
+          npx electron-builder --win nsis --config.extraMetadata.main=main.js
 
-          chmod +x gradlew
-          echo "🚀 بدء البناء والكومبايل النهائي..."
-          ./gradlew assembleDebug --no-daemon
-
-      - name: 5. رفع ملف الـ APK النهائي للتحميل
+      - name: Upload Windows EXE Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SmartCashier-Offline-Debug
-          path: '**/build/outputs/apk/debug/*.apk'
+          name: Daftar-Aldeyon-Windows
+          path: dist_electron/*.exe
